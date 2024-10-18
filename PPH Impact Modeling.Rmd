@@ -1,0 +1,150 @@
+---
+title: "Modeling a detection and treatment bundle for postpartum hemorrhage"
+author: "Christopher Troeger, Stefanie Robinson, Laura Lamberti"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output: 
+  html_document:
+    reference_doc : "Foundation Slides Template.pptx"
+    
+    theme : journal
+    toc: yes
+    toc_float:
+      collapsed: true
+bibliography: "C:/Users/christr/OneDrive - Bill & Melinda Gates Foundation/Documents/References/PPH Ref Library.bib"
+csl: "C:/Users/christr/OneDrive - Bill & Melinda Gates Foundation/Documents/References/the-lancet.csl"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = F, message = F)
+source("C:/Users/christr/OneDrive - Bill & Melinda Gates Foundation/Documents/Code/BMGF/R/environment_setup.R")
+#$css : "C:/Users/christr/OneDrive - Bill & Melinda Gates Foundation/Documents/Code/BMGF/R/Data Science/gates_style_guide.css"
+```
+
+```{r data_prep}
+## Will clean this up-----------------------------------------------------------
+## Functions
+  source("C:/Users/christr/OneDrive - Bill & Melinda Gates Foundation/Documents/Code/BMGF/R/Maternal/PPH Model/pph_population_segmentation_functions.R")
+  source("C:/Users/christr/OneDrive - Bill & Melinda Gates Foundation/Documents/Code/BMGF/R/Data Prep/make_gbd_forecasts.R")
+  source("C:/Users/christr/OneDrive - Bill & Melinda Gates Foundation/Documents/Code/BMGF/R/Maternal/PPH Model/aggregate_pph_obs_stages.R")
+## Burden impact modeling
+  forecast_all_locs <- make_gbd_forecasts(use_goalkeepers = T, goalkeepers_version = 2023)
+
+## Input data
+  in_data <- read.xlsx("C:/Users/christr/OneDrive - Bill & Melinda Gates Foundation/Documents - MNCH D & T/Epi and Data Science Core/Burden Estimation/PPH Burden Population Segmentation.xlsx",
+                       sheet = "Rinput")
+  in_data <- data.table(in_data)
+  
+  for(g in in_data[!(Source %like% "nferred")]$variable){
+    assign(g, in_data[variable == g]$value)
+  }
+  
+  
+## Run baseline forecast | For now, this is illustrative, would modify it ----------------
+  ##------------------------------------------------------------------
+## Models without uncertainty 
+  results_dt <- segment_pph_population(location_name = "SA & SSA")
+  results_dt <- calculate_burden(results_dt, baseline = T)
+
+## Assign the "baseline" values for mortality proportion, low risk proportion
+  assign("mortality_untreated_pct", unique(results_dt$mortality_untreated_pct_used))
+  assign("pph_low_risk_pct", unique(results_dt$prevalence_low_risk_used))
+  assign("disability_scalar", unique(results_dt$disability_scalar_used))
+
+## Models with uncertainty
+  base_forecast <- segment_pph_draws(draws = 10, match_envelope = F, in_location = "SA & SSA")
+
+## Forecasting outcomes ----------------------------------------------
+  forecast_sa_ssa <- copy(forecast_all_locs)
+  calibrate_forecasts()
+  
+  pph_forecast_draws <- forecast_pph_draws(draws = 2)
+
+```
+
+## Motivation & research in context
+
+Excessive bleeding following childbirth, often called postpartum hemorrhage (PPH), is one of the leading causes of maternal death.
+
+Postpartum hemorrhage has several known risk factors like anemia and location of childbirth.[@bienstock_postpartum_2021; @patek_postpartum_2023] Women who have anemia or deliver outside of health facilities are more likely to bleed excessively and to die from blood loss.
+
+Sadly, it is far too common that women with PPH do not receive treatment. This is due in part to a failure to diagnose excessive bleeding. Subjective measurements of blood loss, like visual or estimated, often fail to identify women with PPH. A much more reliable way is to collect and measure blood lost in childbirth. Clinically, PPH occurs when more than 500 mL of blood is lost and severe PPH occurs when more than 1000 mL is lost. Despite effective immediate treatment options that can be delivered in most healthcare facilities, coverage of these treatments is far too low.
+
+Recently, a clinical trial found that a simple package to identify and treat PPH led to a 60% reduction in severe PPH and death.[@gallos_randomized_2023] The EMOTIVE bundle, as it is known, consists of objective measurement of blood loss followed by immediate treatment including uterotonics and IV fluids.
+
+We wanted to better understand the potential impact of identifying and treating women with PPH and how this might reduce maternal mortality in Africa and South Asia so we built an epidemiological model to learn more.
+
+## Key findings
+
+### 1. Postpartum hemorrhage is forecasted to be a major cause of maternal death 
+  
+```{r pph_base_forecast}
+  forecast_line_plot(pph_forecast_draws, out = "Died", title = "Forecasted deaths based on current situation")
+  forecast_line_plot(pph_forecast_draws, out = "Survived", title = "Forecasted episodes based on current situation")
+
+```
+
+### 2. The location of delivery impacts estimated baseline and avertable episodes and deaths
+
+Understanding where episodes and deaths are occurring is essential to design interventions to prevent them. Our model suggests that most PPH episodes and deaths happen among women giving birth outside of health facilities. These women never receive treatment and are much more likely to die than women who give birth in health facilities. 
+
+```{r pph_event_location}
+
+  uncertainty_dot_plot(base_forecast, out = "Died", title = "Maternal deaths due to PPH")
+  uncertainty_dot_plot(base_forecast, out = "Survived", title = "Maternal episodes of PPH", metric = "val")
+
+```
+    
+### 3. Addressing existing and residual burden 
+
+1) Prevent and treat anemia during pregnancy through iron supplementation including IV iron and 2) Provide women with a common uterotonic, misoprostol, to take post-partum regardless of where they gave birth, including at home
+
+## Methods & data
+
+{Traditional methods section, moderate detail}
+
+## Code and approach
+
+Full code is provided in [GitHub repository](https://github.com/ctroeger/pph-impact-modeling)
+
+Sample code is provided in-line to illustrate primary modeling components
+
+```{r sample_code, echo = T, eval = T}
+tmp <- rnorm(10, 0, 1)
+print(paste0("The mean was ", mean(tmp)))
+```
+
+## Links to more resources
+
+[EMOTIVE Trial](https://www.birmingham.ac.uk/research/bctu/trials/womens/emotive/e-motive)
+
+[GBD Results](https://www.healthdata.org/research-analysis/health-risks-issues/maternal-health) 
+
+[WHO Results](https://www.who.int/news-room/fact-sheets/detail/maternal-mortality) 
+
+[Webpage on Postpartum hemorrhage](https://my.clevelandclinic.org/health/diseases/22228-postpartum-hemorrhage)
+
+## Acknowledgements
+
+Authors are employed by the Gates Foundation and are members of the Maternal, Newborn, Child Nutrition and Health (MNCNH) team.
+
+The Gates Foundation was a co-funder of the EMOTIVE trial
+
+Others
+
+## References
+
+I imagine this would look like a normal paper using citation management in Rmarkdown. To get citations into Markdown, follow these steps:
+
+A) Create a folder in Zotero with your citations
+
+B) Right-click folder name, select "Export Collection..."
+
+C) Save as a .BibTex file (.bib)
+
+D) Specify that as the 'bibliography:' filepath in the YAML file
+
+E) Open the .bib in Notepad and find the first line, something like "@article{gallos_randomized_2023}". "gallos_randomized_2023" is going to be the name of your citation
+
+F) In-line in Markdown, enter your citation like this "[@gallos_randomized_2023]"
+
+**References get added automatically to the end**
